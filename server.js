@@ -10,7 +10,7 @@ const Message = require("./models/Message");
 const postRoutes = require("./routes/post");
 const chatRoutes = require("./routes/chat");
 const messageRoutes = require("./routes/message");
-
+require('dotenv').config(); // यह लाइन आपके सर्वर में सबसे ऊपर होनी चाहिए
 const app = express();
 
 // ================= DB =================
