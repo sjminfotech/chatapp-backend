@@ -8,7 +8,31 @@ const CoinWallet = require("../models/CoinWallet");
 const CoinTransaction = require("../models/CoinTransaction");
 const WalletTransaction = require("../models/WalletTransaction");
 const PremiumConversation = require("../models/PremiumConversation");
+const cloudinary = require("../config/cloudinary");
+const uploadMedia = require("../middleware/uploadMedia");
+const uploadAudio = require("../middleware/uploadAudio");
 
+const COST = {
+  image: 5,
+  audio: 10,
+  video: 20
+};
+
+async function deductCoins(userId, amount) {
+  const wallet = await CoinWallet.findOne({ userId });
+
+  if (!wallet || wallet.coins < amount) {
+    return { success: false };
+  }
+
+  wallet.coins -= amount;
+  await wallet.save();
+
+  return {
+    success: true,
+    wallet
+  };
+}
 /* =========================
    SEND MESSAGE
 ========================= */
@@ -243,4 +267,322 @@ router.get("/unread/:userId", async (req, res) => {
     }
 });
 
+router.post("/send-image", uploadMedia.single("file"), async (req, res) => {
+  try {
+    const { senderId, receiverId } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "Image file is required" });
+    }
+
+    const sender = await PremiumUser.findById(senderId);
+    const receiver = await PremiumUser.findById(receiverId);
+
+    if (!sender || !receiver) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // कन्वर्सेशन ढूंढें या नया बनाएं
+    const conversation = await PremiumConversation.findOne({
+      participants: { $all: [senderId, receiverId] }
+    }) || await PremiumConversation.create({
+      participants: [senderId, receiverId]
+    });
+
+    // 👑 स्थिति A: अगर भेजने वाला PREMIUM यूजर है (role: "user")
+    if (sender.role === "user") {
+      const premiumWallet = await CoinWallet.findOne({ userId: senderId });
+
+      // चेक करें कि प्रीमियम यूजर के पास 10 सिक्के हैं या नहीं
+      if (!premiumWallet || premiumWallet.coins < 10) {
+        return res.status(400).json({
+          success: false,
+          message: "Insufficient coins! You need 10 coins to send an image."
+        });
+      }
+
+      // 1. Premium यूजर के वॉलेट से 10 सिक्के काटें
+      premiumWallet.coins -= 10;
+      premiumWallet.totalSpent += 10;
+      await premiumWallet.save();
+
+      // 2. Receiver यानी Buser को 3 सिक्के तुरंत दें
+      let buserWallet = await CoinWallet.findOne({ userId: receiverId });
+      if (!buserWallet) {
+        buserWallet = new CoinWallet({ userId: receiverId, coins: 0 });
+      }
+      buserWallet.coins += 3;
+      await buserWallet.save();
+
+      // 3. Admin को 7 सिक्के ट्रांसफर करें
+      const admin = await PremiumUser.findOne({ role: "admin" });
+      if (admin) {
+        let adminWallet = await CoinWallet.findOne({ userId: admin._id });
+        if (!adminWallet) {
+          adminWallet = new CoinWallet({ userId: admin._id, coins: 0 });
+        }
+        adminWallet.coins += 7;
+        await adminWallet.save();
+      }
+
+      // 4. प्रीमियम का इमेज मैसेज Database में सेव करें
+      const msg = await PremiumMessage.create({
+        conversationId: conversation._id,
+        senderId,
+        receiverId,
+        message: "🖼️ Image",
+        messageType: "image",
+        image: req.file.path, // Cloudinary या लोकल पाथ URL
+        coinsCharged: 10,     // 10 कॉइन्स चार्ज हुए
+        isPaid: true
+      });
+
+      return res.json({
+        success: true,
+        data: msg,
+        remainingCoins: premiumWallet.coins // फ्रंटएंड लाइव अपडेट के लिए
+      });
+    }
+
+    // 👤 स्थिति B: अगर भेजने वाला BUSER है (role: "buser") -> बसूर के लिए इमेज हमेशा फ्री
+    if (sender.role === "buser") {
+      const msg = await PremiumMessage.create({
+        conversationId: conversation._id,
+        senderId,
+        receiverId,
+        message: "🖼️ Image",
+        messageType: "image",
+        image: req.file.path,
+        coinsCharged: 0, 
+        isPaid: true
+      });
+
+      return res.json({
+        success: true,
+        data: msg
+      });
+    }
+
+  } catch (err) {
+    console.log("IMAGE ERROR:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server Error during image custom distribution"
+    });
+  }
+});
+
+router.post("/send-video", uploadMedia.single("file"), async (req, res) => {
+  try {
+    const { senderId, receiverId } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "Video file is required" });
+    }
+
+    const sender = await PremiumUser.findById(senderId);
+    const receiver = await PremiumUser.findById(receiverId);
+
+    if (!sender || !receiver) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // कन्वर्सेशन ढूंढें या नया बनाएं
+    const conversation = await PremiumConversation.findOne({
+      participants: { $all: [senderId, receiverId] }
+    }) || await PremiumConversation.create({
+      participants: [senderId, receiverId]
+    });
+
+    // 👑 स्थिति A: अगर भेजने वाला PREMIUM यूजर है (role: "user")
+    if (sender.role === "user") {
+      const premiumWallet = await CoinWallet.findOne({ userId: senderId });
+
+      // चेक करें कि प्रीमियम यूजर के पास 10 सिक्के हैं या नहीं
+      if (!premiumWallet || premiumWallet.coins < 10) {
+        return res.status(400).json({
+          success: false,
+          message: "Insufficient coins! You need 10 coins to send a video."
+        });
+      }
+
+      // 1. Premium यूजर के वॉलेट से 10 सिक्के काटें
+      premiumWallet.coins -= 10;
+      premiumWallet.totalSpent += 10;
+      await premiumWallet.save();
+
+      // 2. Receiver यानी Buser को 3 सिक्के तुरंत दें
+      let buserWallet = await CoinWallet.findOne({ userId: receiverId });
+      if (!buserWallet) {
+        buserWallet = new CoinWallet({ userId: receiverId, coins: 0 });
+      }
+      buserWallet.coins += 3;
+      await buserWallet.save();
+
+      // 3. Admin को 7 सिक्के ट्रांसफर करें
+      const admin = await PremiumUser.findOne({ role: "admin" });
+      if (admin) {
+        let adminWallet = await CoinWallet.findOne({ userId: admin._id });
+        if (!adminWallet) {
+          adminWallet = new CoinWallet({ userId: admin._id, coins: 0 });
+        }
+        adminWallet.coins += 7;
+        await adminWallet.save();
+      }
+
+      // 4. प्रीमियम का वीडियो मैसेज Database में सेव करें
+      const msg = await PremiumMessage.create({
+        conversationId: conversation._id,
+        senderId,
+        receiverId,
+        message: "🎥 Video",
+        messageType: "video",
+        video: req.file.path, // Cloudinary या लोकल पाथ URL
+        coinsCharged: 10,     // 10 कॉइन्स चार्ज हुए
+        isPaid: true
+      });
+
+      return res.json({
+        success: true,
+        data: msg,
+        remainingCoins: premiumWallet.coins // फ्रंटएंड लाइव अपडेट के लिए
+      });
+    }
+
+    // 👤 स्थिति B: अगर भेजने वाला BUSER है (role: "buser") -> बसूर के लिए वीडियो हमेशा फ्री
+    if (sender.role === "buser") {
+      const msg = await PremiumMessage.create({
+        conversationId: conversation._id,
+        senderId,
+        receiverId,
+        message: "🎥 Video",
+        messageType: "video",
+        video: req.file.path,
+        coinsCharged: 0, 
+        isPaid: true
+      });
+
+      return res.json({
+        success: true,
+        data: msg
+      });
+    }
+
+  } catch (err) {
+    console.log("VIDEO ERROR:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server Error during video custom distribution"
+    });
+  }
+});
+
+router.post("/send-audio", uploadMedia.single("file"), async (req, res) => {
+  console.log("BODY:", req.body);
+  console.log("FILE:", req.file);
+  
+  try {
+    const { senderId, receiverId } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "Audio file is required" });
+    }
+
+    const sender = await PremiumUser.findById(senderId);
+    const receiver = await PremiumUser.findById(receiverId);
+
+    if (!sender || !receiver) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // कन्वर्सेशन ढूंढें या नया बनाएं
+    const conversation = await PremiumConversation.findOne({
+      participants: { $all: [senderId, receiverId] }
+    }) || await PremiumConversation.create({
+      participants: [senderId, receiverId]
+    });
+
+    // 👑 स्थिति A: अगर भेजने वाला PREMIUM यूजर है (role: "user")
+    if (sender.role === "user") {
+      const premiumWallet = await CoinWallet.findOne({ userId: senderId });
+
+      // चेक करें कि प्रीमियम यूजर के पास 10 सिक्के हैं या नहीं
+      if (!premiumWallet || premiumWallet.coins < 10) {
+        return res.status(400).json({
+          success: false,
+          message: "Insufficient coins! You need 10 coins to send a voice message."
+        });
+      }
+
+      // 1. Premium यूजर के वॉलेट से 10 सिक्के काटें
+      premiumWallet.coins -= 10;
+      premiumWallet.totalSpent += 10;
+      await premiumWallet.save();
+
+      // 2. Receiver यानी Buser को 3 सिक्के तुरंत दें
+      let buserWallet = await CoinWallet.findOne({ userId: receiverId });
+      if (!buserWallet) {
+        buserWallet = new CoinWallet({ userId: receiverId, coins: 0 });
+      }
+      buserWallet.coins += 3;
+      await buserWallet.save();
+
+      // 3. Admin को 7 सिक्के ट्रांसफर करें
+      const admin = await PremiumUser.findOne({ role: "admin" });
+      if (admin) {
+        let adminWallet = await CoinWallet.findOne({ userId: admin._id });
+        if (!adminWallet) {
+          adminWallet = new CoinWallet({ userId: admin._id, coins: 0 });
+        }
+        adminWallet.coins += 7;
+        await adminWallet.save();
+      }
+
+      // 4. प्रीमियम का ऑडियो मैसेज Database में सेव करें
+      const msg = await PremiumMessage.create({
+        conversationId: conversation._id,
+        senderId,
+        receiverId,
+        message: "🎤 Voice Message",
+        messageType: "audio",
+        audio: req.file.path, // Cloudinary URL
+        coinsCharged: 10,     // 10 कॉइन्स चार्ज हुए
+        isPaid: true          // तुरंत पैसे कट गए हैं
+      });
+
+      return res.json({
+        success: true,
+        data: msg,
+        remainingCoins: premiumWallet.coins // फ्रंटएंड पर कॉइन्स तुरंत कम करने के लिए
+      });
+    }
+
+    // 👤 स्थिति B: अगर भेजने वाला BUSER है (role: "buser") -> बसूर के लिए ऑडियो हमेशा फ्री रहेगा
+    if (sender.role === "buser") {
+      const msg = await PremiumMessage.create({
+        conversationId: conversation._id,
+        senderId,
+        receiverId,
+        message: "🎤 Voice Message",
+        messageType: "audio",
+        audio: req.file.path,
+        coinsCharged: 0, 
+        isPaid: true
+      });
+
+      return res.json({
+        success: true,
+        data: msg
+      });
+    }
+
+  } catch (err) {
+    console.log("========== AUDIO ERROR ==========");
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      message: "Server Error during audio dynamic distribution"
+    });
+  }
+});
 module.exports = router;

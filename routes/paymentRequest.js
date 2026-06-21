@@ -3,12 +3,13 @@ const router = express.Router();
 const CoinWallet = require("../models/CoinWallet");
 const CoinTransaction = require("../models/CoinTransaction");
 const PaymentRequest = require("../models/PaymentRequest");
+const User = require("../models/User"); // ✨ भैया, यह इम्पोर्ट मिसिंग था, अब जोड़ दिया है!
 const adminAuth = require("../middleware/adminAuth");
 
+// 📤 1. Payment Request Upload Route
 router.post("/upload", async (req, res) => {
     try {
-
-        const { userId, screenshot } = req.body;
+        const { userId, screenshot, amount, upiId } = req.body;
 
         if (!screenshot) {
             return res.status(400).json({
@@ -17,20 +18,21 @@ router.post("/upload", async (req, res) => {
             });
         }
 
-        const payment = await PaymentRequest.create({
+        const newPayment = await PaymentRequest.create({
             userId,
-            screenshot
+            screenshot,
+            amount: amount || 99, 
+            upiId: upiId || "Not Provided"
         });
 
         res.status(201).json({
             success: true,
             message: "Payment Request Submitted",
-            data: payment
+            data: newPayment
         });
 
     } catch (error) {
         console.log(error);
-
         res.status(500).json({
             success: false,
             message: "Server Error"
@@ -38,9 +40,9 @@ router.post("/upload", async (req, res) => {
     }
 });
 
+// ⏳ 2. Get Pending Payments
 router.get("/pending", async (req, res) => {
     try {
-
         const requests = await PaymentRequest
             .find({ status: "pending" })
             .sort({ createdAt: -1 });
@@ -52,9 +54,7 @@ router.get("/pending", async (req, res) => {
         });
 
     } catch (error) {
-
         console.log(error);
-
         res.status(500).json({
             success: false,
             message: "Server Error"
@@ -62,9 +62,9 @@ router.get("/pending", async (req, res) => {
     }
 });
 
+// ✅ 3. Approve Payment Request
 router.post("/approve/:id", async (req, res) => {
     try {
-
         const payment = await PaymentRequest.findById(req.params.id);
 
         if (!payment) {
@@ -81,11 +81,9 @@ router.post("/approve/:id", async (req, res) => {
             });
         }
 
-        // Update payment status
         payment.status = "approved";
         await payment.save();
 
-        // Find wallet
         let wallet = await CoinWallet.findOne({
             userId: payment.userId
         });
@@ -103,7 +101,6 @@ router.post("/approve/:id", async (req, res) => {
             await wallet.save();
         }
 
-        // Transaction entry
         await CoinTransaction.create({
             userId: payment.userId,
             type: "purchase",
@@ -117,9 +114,7 @@ router.post("/approve/:id", async (req, res) => {
         });
 
     } catch (error) {
-
         console.log(error);
-
         res.status(500).json({
             success: false,
             message: "Server Error"
@@ -127,9 +122,9 @@ router.post("/approve/:id", async (req, res) => {
     }
 });
 
+// ❌ 4. Reject Payment Request
 router.post("/reject/:id", async (req, res) => {
     try {
-
         const payment = await PaymentRequest.findById(req.params.id);
 
         if (!payment) {
@@ -156,7 +151,6 @@ router.post("/reject/:id", async (req, res) => {
 
     } catch (error) {
         console.log(error);
-
         res.status(500).json({
             success: false,
             message: "Server Error"
@@ -164,9 +158,9 @@ router.post("/reject/:id", async (req, res) => {
     }
 });
 
+// 📜 5. Get Approved Payments
 router.get("/approved", async (req, res) => {
     try {
-
         const payments = await PaymentRequest
             .find({ status: "approved" })
             .sort({ createdAt: -1 });
@@ -178,9 +172,7 @@ router.get("/approved", async (req, res) => {
         });
 
     } catch (error) {
-
         console.log(error);
-
         res.status(500).json({
             success: false,
             message: "Server Error"
@@ -188,13 +180,11 @@ router.get("/approved", async (req, res) => {
     }
 });
 
+// 🗂️ 6. Get User Payment History
 router.get("/history/:userId", async (req, res) => {
     try {
-
         const payments = await PaymentRequest
-            .find({
-                userId: req.params.userId
-            })
+            .find({ userId: req.params.userId })
             .sort({ createdAt: -1 });
 
         res.json({
@@ -204,13 +194,14 @@ router.get("/history/:userId", async (req, res) => {
         });
 
     } catch (error) {
-
         console.log(error);
-
         res.status(500).json({
             success: false,
             message: "Server Error"
         });
     }
 });
+
+
+
 module.exports = router;

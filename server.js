@@ -47,6 +47,9 @@ app.use("/api/coins", coinRoutes);
 app.use("/api/premium-chat", premiumChatRoutes);
 app.use("/api/premium-auth", premiumAuthRoutes);
 app.use("/api/premium-call", premiumCallRoutes);
+// 🔽 पेमेंट रिक्वेस्ट के रूट को सर्वर में रजिस्टर करने के लिए यह कोड डालें
+app.use("/api/payment", require("./routes/paymentRequest"));
+// app.use("/api/admin", require("./routes/paymentRequest"));
 app.use(
 "/api/withdraw",
 withdrawRoutes

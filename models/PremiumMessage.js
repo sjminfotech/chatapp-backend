@@ -53,6 +53,15 @@ const premiumMessageSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    conversationId: {
+   type: mongoose.Schema.Types.ObjectId,
+   required: true
+},
+
+message: {
+   type: String,
+   required: true
+},
 
     image: {
         type: String,

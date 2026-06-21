@@ -283,37 +283,51 @@ router.get("/premium-users", async (req, res) => {
 
 router.get("/users/:id", async (req, res) => {
   try {
-    const currentUser = await PremiumUser.findById(req.params.id);
+    const { id } = req.params;
+    const { type } = req.query;
 
-    if (!currentUser) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found"
+    // Single User
+    if (type === "single") {
+      const user = await PremiumUser
+        .findById(id)
+        .select("-password");
+
+      return res.json({
+        success: true,
+        user
       });
     }
 
+    // Chat User List
+    const currentUser = await PremiumUser.findById(id);
+
     let users = [];
 
-    // 👇 MAIN LOGIC
     if (currentUser.role === "user") {
-      // premium user → show buser
-      users = await PremiumUser.find({ role: "buser" }).select("-password");
+      users = await PremiumUser.find({
+        role: "buser"
+      }).select("-password");
     } else {
-      // buser → show user
-      users = await PremiumUser.find({ role: "user" }).select("-password");
+      users = await PremiumUser.find({
+        role: "user"
+      }).select("-password");
     }
 
-    res.json({
+    return res.json({
       success: true,
       users
     });
 
-  } catch (error) {
-    console.log(error);
+  } catch (err) {
+    console.log(err);
+
     res.status(500).json({
       success: false,
       message: "Server Error"
     });
   }
 });
+
+
+
 module.exports = router;
