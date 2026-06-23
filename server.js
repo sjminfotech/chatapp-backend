@@ -118,6 +118,15 @@ io.on("connection", (socket) => {
   }
 });
 
+socket.on("receive-message", (msg) => {
+  // 1. अगर आप उस चैट के अंदर नहीं हैं, तो अनरीड काउंट बढ़ाएं
+  setUsers((prevUsers) => 
+    prevUsers.map((u) => 
+      u._id === msg.senderId ? { ...u, unreadCount: u.unreadCount + 1 } : u
+    )
+  );
+});
+
     // ================= LIVE CALL BILLING SYSTEM =================
     socket.on("start-live-call", async (data) => {
 
