@@ -9,6 +9,7 @@ const CoinTransaction = require("../models/CoinTransaction");
 const jwt = require("jsonwebtoken");
 const PremiumAuth = require("../middleware/premiumAuth");
 const adminAuth = require("../middleware/adminAuth");
+const auth = require("../middleware/auth");
 router.post("/signup", async (req, res) => {
     try {
 
