@@ -11,7 +11,7 @@ const PremiumAuth = require("../middleware/premiumAuth");
 const adminAuth = require("../middleware/adminAuth");
 const auth = require("../middleware/auth");
 const transporter = require("../config/mailer");
-const Resendmailer = require("../config/resendmailer")
+// const Resendmailer = require("../config/resendmailer")
 router.post("/signup", async (req, res) => {
     try {
 
