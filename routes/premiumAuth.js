@@ -13,7 +13,7 @@ const auth = require("../middleware/auth");
 const transporter = require("../config/mailer");
 // पुराने इम्पॉर्ट्स को हटाकर इसे रखें:
 const Resendmailer = require("../config/resendMailer");
-const { sendEmail } = require("../config/resendmailer");
+const { sendEmail } = require("../config/resendMailer");
 router.post("/signup", async (req, res) => {
     try {
 
