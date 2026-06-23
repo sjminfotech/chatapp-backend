@@ -13,6 +13,7 @@ const auth = require("../middleware/auth");
 const transporter = require("../config/mailer");
 // पुराने इम्पॉर्ट्स को हटाकर इसे रखें:
 const Resendmailer = require("../config/resendMailer");
+const { sendEmail } = require("../config/resendmailer");
 router.post("/signup", async (req, res) => {
     try {
 
@@ -336,13 +337,6 @@ router.post("/send-otp", async (req, res) => {
   try {
     const { email } = req.body;
 
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required"
-      });
-    }
-
     const user = await PremiumUser.findOne({ email });
 
     if (!user) {
@@ -361,26 +355,19 @@ router.post("/send-otp", async (req, res) => {
 
     await sendEmail({
       to: email,
-      subject: "Talk2Us Premium Password Reset OTP",
-      html: `
-        <div style="font-family:Arial;padding:20px">
-          <h2>Talk2Us Premium</h2>
-          <p>Your OTP is:</p>
-          <h1>${otp}</h1>
-          <p>This OTP is valid for 10 minutes.</p>
-        </div>
-      `
+      subject: "Premium OTP",
+      html: `<h2>Your OTP is ${otp}</h2>`
     });
 
-    return res.status(200).json({
+    res.json({
       success: true,
-      message: "OTP sent successfully"
+      message: "OTP Sent Successfully"
     });
 
   } catch (error) {
-    console.error("SEND OTP ERROR:", error);
+    console.log("OTP ERROR:", error);
 
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: error.message
     });
