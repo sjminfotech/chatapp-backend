@@ -10,7 +10,7 @@ const jwt = require("jsonwebtoken");
 const PremiumAuth = require("../middleware/premiumAuth");
 const adminAuth = require("../middleware/adminAuth");
 const auth = require("../middleware/auth");
-const Mailer = require("../config/mailer");
+const transporter = require("../config/mailer");
 const Resendmailer = require("../config/resendmailer")
 router.post("/signup", async (req, res) => {
     try {
