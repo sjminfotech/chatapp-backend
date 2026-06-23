@@ -36,8 +36,14 @@ role: {
 },
 
 
-otp: { type: String },
-otpExpire: { type: Date },
+otp: {
+  type: String,
+  default: null,
+},
+otpExpire: {
+  type: Date,
+  default: null,
+},
     status: {
         type: String,
         enum: ["pending", "approved", "rejected"],
