@@ -332,16 +332,58 @@ router.get("/users/:id", async (req, res) => {
   }
 });
 
-// Premium User Send OTP
-// Premium User Send OTP राउट (इसे पुरानी वाली जगह पर पेस्ट करें)
 router.post("/send-otp", async (req, res) => {
   try {
-    return res.json({
-      success: true,
-      message: "Route Working"
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required"
+      });
+    }
+
+    const user = await PremiumUser.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    user.otp = otp;
+    user.otpExpire = new Date(Date.now() + 10 * 60 * 1000);
+
+    await user.save();
+
+    await sendEmail({
+      to: email,
+      subject: "Talk2Us Premium Password Reset OTP",
+      html: `
+        <div style="font-family:Arial;padding:20px">
+          <h2>Talk2Us Premium</h2>
+          <p>Your OTP is:</p>
+          <h1>${otp}</h1>
+          <p>This OTP is valid for 10 minutes.</p>
+        </div>
+      `
     });
-  } catch (err) {
-    console.log(err);
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP sent successfully"
+    });
+
+  } catch (error) {
+    console.error("SEND OTP ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 });
 // Premium User Reset Password
