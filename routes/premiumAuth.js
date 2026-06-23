@@ -11,7 +11,8 @@ const PremiumAuth = require("../middleware/premiumAuth");
 const adminAuth = require("../middleware/adminAuth");
 const auth = require("../middleware/auth");
 const transporter = require("../config/mailer");
-// const Resendmailer = require("../config/resendmailer")
+// पुराने इम्पॉर्ट्स को हटाकर इसे रखें:
+const { sendEmail } = require("../config/resendmailer");
 router.post("/signup", async (req, res) => {
     try {
 
@@ -332,60 +333,34 @@ router.get("/users/:id", async (req, res) => {
 });
 
 // Premium User Send OTP
+// Premium User Send OTP राउट (इसे पुरानी वाली जगह पर पेस्ट करें)
 router.post("/send-otp", async (req, res) => {
   try {
     const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required"
-      });
-    }
-
     const user = await PremiumUser.findOne({ email });
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "Premium User not found"
-      });
+      return res.status(404).json({ success: false, message: "User not found" });
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
     user.otp = otp;
     user.otpExpire = new Date(Date.now() + 10 * 60 * 1000);
-
     await user.save();
 
-    await transporter.sendMail({
-      from: process.env.BREVO_SMTP_USER,
+    // यहाँ Resendmailer का इस्तेमाल करें
+    await Resendmailer.sendEmail({
       to: email,
       subject: "Premium Password Reset OTP",
-      html: `
-        <h2>Talk2Us Premium OTP</h2>
-        <p>Your OTP is:</p>
-        <h1>${otp}</h1>
-        <p>This OTP is valid for 10 minutes.</p>
-      `
+      html: `<h2>Your OTP is: ${otp}</h2>`
     });
 
-    return res.status(200).json({
-      success: true,
-      message: "OTP sent successfully"
-    });
-
+    return res.status(200).json({ success: true, message: "OTP sent" });
   } catch (error) {
-    console.error("PREMIUM OTP ERROR:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    console.error("OTP ERROR:", error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
-
 // Premium User Reset Password
 router.post("/premium-reset-password", async (req, res) => {
   try {
