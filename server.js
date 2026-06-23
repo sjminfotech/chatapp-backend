@@ -1,4 +1,5 @@
 require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
@@ -16,13 +17,13 @@ const premiumAuthRoutes = require("./routes/premiumAuth");
 const premiumChatRoutes = require("./routes/premiumChat");
 const premiumCallRoutes = require("./routes/premiumCall");
 const adminRoutes = require("./routes/admin");
+const withdrawRoutes = require("./routes/withdraw");
+
 // ================= MODELS =================
-const Message = require("./models/Message");
 const CoinWallet = require("./models/CoinWallet");
 const PremiumUser = require("./models/PremiumUser");
-const withdrawRoutes =
-require("./routes/withdraw");
-// ================= APP INIT =================
+
+// ================= APP =================
 const app = express();
 
 // ================= DB =================
@@ -35,187 +36,272 @@ app.use(express.urlencoded({ extended: true }));
 
 // ================= STATIC =================
 app.use("/uploads", express.static("uploads"));
-app.use("/api/admin", adminRoutes);
+
 // ================= ROUTES =================
+app.use("/api/admin", adminRoutes);
+
 app.use("/api/user", require("./routes/user"));
 app.use("/api/auth", require("./routes/auth"));
+
 app.use("/api/post", postRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/message", messageRoutes);
+
 app.use("/api/premium", premiumRoutes);
 app.use("/api/coins", coinRoutes);
+
 app.use("/api/premium-chat", premiumChatRoutes);
 app.use("/api/premium-auth", premiumAuthRoutes);
 app.use("/api/premium-call", premiumCallRoutes);
-// 🔽 पेमेंट रिक्वेस्ट के रूट को सर्वर में रजिस्टर करने के लिए यह कोड डालें
+
 app.use("/api/payment", require("./routes/paymentRequest"));
-// app.use("/api/admin", require("./routes/paymentRequest"));
-app.use(
-"/api/withdraw",
-withdrawRoutes
-);
+
+app.use("/api/withdraw", withdrawRoutes);
+
 // ================= SERVER =================
 const server = http.createServer(app);
 
+// ================= SOCKET.IO =================
 const io = new Server(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    }
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
 });
 
 // ================= ONLINE USERS =================
 const onlineUsers = new Map();
 
-// ================= SOCKET =================
+// ================= SOCKET CONNECTION =================
 io.on("connection", (socket) => {
+  console.log("✅ User Connected:", socket.id);
 
-    console.log("User connected:", socket.id);
+  // ================= JOIN =================
+  socket.on("join", (userId) => {
+    onlineUsers.set(userId, socket.id);
 
-    // ================= JOIN USER =================
-    socket.on("join", (userId) => {
-        onlineUsers.set(userId, socket.id);
-        io.emit("onlineUsers", Array.from(onlineUsers.keys()));
-    });
+    io.emit(
+      "onlineUsers",
+      Array.from(onlineUsers.keys())
+    );
 
-    // ================= JOIN CALL ROOM =================
-    socket.on("join-call", (callId) => {
-        socket.join(callId);
-    });
+    console.log("Joined User:", userId);
+  });
 
-    // ================= WEBRTC SIGNALING =================
-    socket.on("offer", ({ callId, offer }) => {
-        socket.to(callId).emit("offer", { offer });
-    });
+  // ================= NORMAL CHAT =================
+  socket.on("sendMessage", (data) => {
+    const receiverSocket =
+      onlineUsers.get(data.receiverId);
 
-    socket.on("answer", ({ callId, answer }) => {
-        socket.to(callId).emit("answer", { answer });
-    });
+    if (receiverSocket) {
+      io.to(receiverSocket).emit(
+        "receiveMessage",
+        data
+      );
+    }
+  });
 
-    socket.on("ice-candidate", ({ callId, candidate }) => {
-        socket.to(callId).emit("ice-candidate", { candidate });
-    });
+  // ================= PREMIUM CHAT =================
+  socket.on("premium-send-message", (data) => {
+    console.log("Premium Message:", data);
 
-    // ================= CHAT =================
-    socket.on("sendMessage", (data) => {
-        const receiverSocket = onlineUsers.get(data.receiverId);
+    const receiverSocket =
+      onlineUsers.get(data.receiverId);
 
-        if (receiverSocket) {
-            io.to(receiverSocket).emit("receiveMessage", data);
-        }
-    });
-
-    socket.on("premium-send-message", (data) => {
-  const receiverSocket =
-    onlineUsers.get(data.receiverId);
-
-  if (receiverSocket) {
-    io.to(receiverSocket)
-      .emit(
+    if (receiverSocket) {
+      io.to(receiverSocket).emit(
         "premium-receive-message",
         data
       );
-  }
-});
+    }
+  });
 
-socket.on("receive-message", (msg) => {
-  // 1. अगर आप उस चैट के अंदर नहीं हैं, तो अनरीड काउंट बढ़ाएं
-  setUsers((prevUsers) => 
-    prevUsers.map((u) => 
-      u._id === msg.senderId ? { ...u, unreadCount: u.unreadCount + 1 } : u
-    )
+  // ================= TYPING =================
+  socket.on("typing", ({ receiverId, senderId }) => {
+    const receiverSocket =
+      onlineUsers.get(receiverId);
+
+    if (receiverSocket) {
+      io.to(receiverSocket).emit(
+        "typing",
+        { senderId }
+      );
+    }
+  });
+
+  socket.on(
+    "stopTyping",
+    ({ receiverId, senderId }) => {
+      const receiverSocket =
+        onlineUsers.get(receiverId);
+
+      if (receiverSocket) {
+        io.to(receiverSocket).emit(
+          "stopTyping",
+          { senderId }
+        );
+      }
+    }
   );
-});
 
-    // ================= LIVE CALL BILLING SYSTEM =================
-    socket.on("start-live-call", async (data) => {
+  // ================= CALL ROOM =================
+  socket.on("join-call", (callId) => {
+    socket.join(callId);
 
-        const { callId, callerId, receiverId } = data;
+    console.log(
+      `Joined Call Room: ${callId}`
+    );
+  });
 
-        let minutes = 0;
+  // ================= WEBRTC OFFER =================
+  socket.on(
+    "offer",
+    ({ callId, offer }) => {
+      socket.to(callId).emit("offer", {
+        offer,
+      });
+    }
+  );
 
-        const interval = setInterval(async () => {
+  // ================= WEBRTC ANSWER =================
+  socket.on(
+    "answer",
+    ({ callId, answer }) => {
+      socket.to(callId).emit("answer", {
+        answer,
+      });
+    }
+  );
 
-            const wallet = await CoinWallet.findOne({ userId: callerId });
+  // ================= ICE CANDIDATE =================
+  socket.on(
+    "ice-candidate",
+    ({ callId, candidate }) => {
+      socket
+        .to(callId)
+        .emit("ice-candidate", {
+          candidate,
+        });
+    }
+  );
 
-            if (!wallet || wallet.coins < 50) {
+  // ================= LIVE CALL BILLING =================
+  socket.on(
+    "start-live-call",
+    async ({
+      callId,
+      callerId,
+      receiverId,
+    }) => {
+      let minutes = 0;
 
-                clearInterval(interval);
+      const interval = setInterval(
+        async () => {
+          try {
+            const wallet =
+              await CoinWallet.findOne({
+                userId: callerId,
+              });
 
-                io.to(callId).emit("call-ended", {
-                    reason: "Insufficient coins"
-                });
+            if (
+              !wallet ||
+              wallet.coins < 50
+            ) {
+              clearInterval(interval);
 
-                return;
+              io.to(callId).emit(
+                "call-ended",
+                {
+                  reason:
+                    "Insufficient Coins",
+                }
+              );
+
+              return;
             }
 
-            // Deduct coins
             wallet.coins -= 50;
             wallet.totalSpent += 50;
+
             await wallet.save();
 
-            // Creator earning
-            const creator = await PremiumUser.findById(receiverId);
+            const creator =
+              await PremiumUser.findById(
+                receiverId
+              );
 
             if (creator) {
-                creator.walletBalance += 15;
-                creator.totalEarnings += 15;
-                await creator.save();
+              creator.walletBalance += 15;
+              creator.totalEarnings += 15;
+
+              await creator.save();
             }
 
             minutes++;
 
-            io.to(callId).emit("call-update", {
+            io.to(callId).emit(
+              "call-update",
+              {
                 minutes,
-                remainingCoins: wallet.coins
-            });
+                remainingCoins:
+                  wallet.coins,
+              }
+            );
+          } catch (err) {
+            console.log(err);
+          }
+        },
+        60000
+      );
 
-        }, 60000);
-    });
+      socket.on("end-call", () => {
+        clearInterval(interval);
 
-    // ================= END CALL =================
-    socket.on("end-call", (callId) => {
-        io.to(callId).emit("call-ended", {
-            reason: "Call ended by user"
-        });
-    });
+        io.to(callId).emit(
+          "call-ended",
+          {
+            reason:
+              "Call Ended By User",
+          }
+        );
+      });
+    }
+  );
 
-    // ================= TYPING =================
-    socket.on("typing", ({ receiverId, senderId }) => {
-        const receiverSocket = onlineUsers.get(receiverId);
+  // ================= DISCONNECT =================
+  socket.on("disconnect", () => {
+    for (let [
+      userId,
+      socketId,
+    ] of onlineUsers.entries()) {
+      if (socketId === socket.id) {
+        onlineUsers.delete(userId);
+        break;
+      }
+    }
 
-        if (receiverSocket) {
-            io.to(receiverSocket).emit("typing", { senderId });
-        }
-    });
+    io.emit(
+      "onlineUsers",
+      Array.from(onlineUsers.keys())
+    );
 
-    socket.on("stopTyping", ({ receiverId, senderId }) => {
-        const receiverSocket = onlineUsers.get(receiverId);
+    console.log(
+      "❌ User Disconnected:",
+      socket.id
+    );
+  });
+});
 
-        if (receiverSocket) {
-            io.to(receiverSocket).emit("stopTyping", { senderId });
-        }
-    });
-
-    // ================= DISCONNECT =================
-    socket.on("disconnect", () => {
-
-        for (let [userId, socketId] of onlineUsers) {
-            if (socketId === socket.id) {
-                onlineUsers.delete(userId);
-                break;
-            }
-        }
-
-        io.emit("onlineUsers", Array.from(onlineUsers.keys()));
-
-        console.log("User disconnected:", socket.id);
-    });
+// ================= HOME ROUTE =================
+app.get("/", (req, res) => {
+  res.send("Chat App Backend Running...");
 });
 
 // ================= START SERVER =================
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  console.log(
+    `🚀 Server Running On Port ${PORT}`
+  );
 });
