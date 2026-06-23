@@ -378,25 +378,44 @@ router.post("/premium-reset-password", async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
 
+    console.log("EMAIL:", email);
+    console.log("OTP:", otp);
+
     const user = await PremiumUser.findOne({
       email,
       otp,
       otpExpire: { $gt: Date.now() },
     });
 
+    console.log("USER FOUND:", user);
+
     if (!user) {
-      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired OTP"
+      });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
+
     user.password = hashedPassword;
-    user.otp = null; // OTP को डिलीट करें ताकि दोबारा इस्तेमाल न हो सके
+    user.otp = null;
     user.otpExpire = null;
+
     await user.save();
 
-    res.json({ success: true, message: "Password updated successfully" });
+    res.json({
+      success: true,
+      message: "Password updated successfully"
+    });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: "Server Error" });
+    console.log(error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 });
 
