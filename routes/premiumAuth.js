@@ -332,7 +332,7 @@ router.get("/users/:id", async (req, res) => {
 });
 
 // Premium User Send OTP
-router.post("/premium-send-otp", async (req, res) => {
+router.post("/send-otp", async (req, res) => {
   try {
     const { email } = req.body;
 
