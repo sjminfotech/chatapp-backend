@@ -35,6 +35,9 @@ role: {
   default: "user"
 },
 
+
+otp: { type: String },
+otpExpire: { type: Date },
     status: {
         type: String,
         enum: ["pending", "approved", "rejected"],

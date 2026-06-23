@@ -328,6 +328,59 @@ router.get("/users/:id", async (req, res) => {
   }
 });
 
+// Premium User Send OTP
+router.post("/premium-send-otp", async (req, res) => {
+  try {
+    const { email } = req.body;
+    // यहाँ PremiumUser मॉडल का उपयोग करें
+    const user = await PremiumUser.findOne({ email });
+    if (!user) return res.status(404).json({ success: false, message: "Premium User not found" });
 
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    user.otp = otp;
+    user.otpExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+    await user.save();
+
+    // Nodemailer का उपयोग करके ईमेल भेजें
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Premium Password Reset OTP",
+      text: `Your Premium account OTP is ${otp}. It is valid for 10 minutes.`,
+    });
+
+    res.json({ success: true, message: "OTP sent to your email" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+});
+
+// Premium User Reset Password
+router.post("/premium-reset-password", async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    const user = await PremiumUser.findOne({
+      email,
+      otp,
+      otpExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+    user.otp = null; // OTP को डिलीट करें ताकि दोबारा इस्तेमाल न हो सके
+    user.otpExpire = null;
+    await user.save();
+
+    res.json({ success: true, message: "Password updated successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Server Error" });
+  }
+});
 
 module.exports = router;
