@@ -27,37 +27,52 @@ const uploadPdfController = async (req, res) => {
       });
     }
 
+    // ✅ Check if DC No already exists
+    const existingPdf = await Pdf.findOne({ dcNo });
+
+    if (existingPdf) {
+      // Delete uploaded file from local uploads folder
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+
+      return res.status(409).json({
+        success: false,
+        message: "DC No already exists in database",
+      });
+    }
+
     const fileBuffer = fs.readFileSync(req.file.path);
 
-const fileName = `${Date.now()}-${req.file.originalname}`;
+    const fileName = `${Date.now()}-${req.file.originalname}`;
 
-const { error } = await supabase.storage
-  .from(process.env.SUPABASE_BUCKET)
-  .upload(fileName, fileBuffer, {
-    contentType: "application/pdf",
-    upsert: false,
-  });
+    const { error } = await supabase.storage
+      .from(process.env.SUPABASE_BUCKET)
+      .upload(fileName, fileBuffer, {
+        contentType: "application/pdf",
+        upsert: false,
+      });
 
-if (error) {
-  throw error;
-}
+    if (error) {
+      throw error;
+    }
 
-const { data } = supabase.storage
-  .from(process.env.SUPABASE_BUCKET)
-  .getPublicUrl(fileName);
+    const { data } = supabase.storage
+      .from(process.env.SUPABASE_BUCKET)
+      .getPublicUrl(fileName);
 
-const pdf = await Pdf.create({
-  userId: req.user._id,
-  name: req.user.name,
-  mobile,
-  dcNo,
-  assetNo,
-  pdfUrl: data.publicUrl,
-  publicId: fileName,
-  originalFileName: req.file.originalname,
-  fileSize: req.file.size,
-  uploadedBy: req.user.name,
-});
+    const pdf = await Pdf.create({
+      userId: req.user._id,
+      name: req.user.name,
+      mobile,
+      dcNo,
+      assetNo,
+      pdfUrl: data.publicUrl,
+      publicId: fileName,
+      originalFileName: req.file.originalname,
+      fileSize: req.file.size,
+      uploadedBy: req.user.name,
+    });
 
     if (fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
@@ -73,6 +88,14 @@ const pdf = await Pdf.create({
 
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
+    }
+
+    // MongoDB Duplicate Key Error
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "DC No already exists in database",
+      });
     }
 
     return res.status(500).json({
