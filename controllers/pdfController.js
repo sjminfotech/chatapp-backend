@@ -2,7 +2,7 @@
 const Pdf = require('../models/pdf');
 const cloudinary = require("../config/cloudinary");
 const fs = require("fs");
-// const supabase = require("../config/supabase");
+const supabase = require("../config/supabase");
 
 const path = require("path");
 
