@@ -2,9 +2,8 @@ const express = require("express");
 const router = express.Router();
 
 // Middlewares
-// (Hum simple import rakh rahe hain pehle)
 const authMiddleware = require("../middleware/authMiddleware");
-const uploadPdf = require("../middleware/uploadPdf"); 
+const uploadPdf = require("../middleware/uploadPdf"); // Multer instance
 
 // Controllers
 const pdfController = require("../controllers/pdfController");
@@ -19,7 +18,7 @@ const {
   deletePdf,
 } = pdfController;
 
-// 🔍 QUICK DEBUGGER: Terminal par Types dikhayega
+// 🔍 QUICK DEBUGGER: Konsi cheez crash kar rahi hai terminal par turant dikhegi
 console.log("=== CHECKING ROUTE HANDLERS ===");
 console.log("authMiddleware:", typeof authMiddleware);
 console.log("uploadPdf:", typeof uploadPdf);
