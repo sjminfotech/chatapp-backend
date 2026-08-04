@@ -6,7 +6,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 
 const connectDB = require("./config/db");
-
+const excelRoutes = require("./routes/excelRoutes");
 // ================= ROUTES =================
 const premiumRoutes = require("./routes/premium");
 const postRoutes = require("./routes/post");
@@ -56,7 +56,7 @@ app.use("/api/premium-auth", premiumAuthRoutes);
 app.use("/api/premium-call", premiumCallRoutes);
 
 app.use("/api/payment", require("./routes/paymentRequest"));
-
+app.use("/api/excel", excelRoutes);
 app.use("/api/withdraw", withdrawRoutes);
 
 // ================= SERVER =================
