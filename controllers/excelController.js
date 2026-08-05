@@ -61,24 +61,35 @@ exports.downloadSampleFormat = (req, res) => {
 // ===============================
 exports.uploadBulkExcel = async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({
+    // 1. Check Auth User
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({
         success: false,
-        message: "Please upload Excel file",
+        message: "Unauthorized access. User not found in request.",
       });
     }
 
+    // 2. Check File Upload
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({
+        success: false,
+        message: "Please upload a valid Excel file.",
+      });
+    }
+
+    // 3. Read Workbook Buffer
     const workbook = XLSX.read(req.file.buffer, {
       type: "buffer",
+      cellDates: true, // Auto-parse JS Date objects from Excel
     });
 
     const sheetName = workbook.SheetNames[0];
-
     const sheetData = XLSX.utils.sheet_to_json(
-      workbook.Sheets[sheetName]
+      workbook.Sheets[sheetName],
+      { raw: false }
     );
 
-    console.log("Rows:", sheetData.length);
+    console.log("Total Excel Rows:", sheetData.length);
 
     const records = [];
 
@@ -88,6 +99,15 @@ exports.uploadBulkExcel = async (req, res) => {
         : "";
 
       if (!invoiceNo) continue;
+
+      // Safe Date Parsing
+      let parsedGrnDate = null;
+      if (row["GRN Date"]) {
+        const d = new Date(row["GRN Date"]);
+        if (!isNaN(d.getTime())) {
+          parsedGrnDate = d;
+        }
+      }
 
       records.push({
         userId: req.user._id,
@@ -109,38 +129,37 @@ exports.uploadBulkExcel = async (req, res) => {
         assetNo: row["Asset No."] || "",
 
         grnNum: row["GRN NUM"] || "",
-        grnDate: row["GRN Date"]
-          ? new Date(row["GRN Date"])
-          : null,
+        grnDate: parsedGrnDate,
 
-        grnStatus: row["GRN NUM"]
-          ? "Completed"
-          : "Pending",
+        grnStatus: row["GRN NUM"] ? "Completed" : "Pending",
       });
     }
 
-    if (records.length > 0) {
-      const saved = await GrnExcel.insertMany(records);
-
-      console.log("Saved:", saved.length);
+    if (records.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid records found in the uploaded sheet.",
+      });
     }
 
-   return res.status(200).json({
-    success: true,
-    message: `${records.length} records uploaded successfully.`,
-  });
+    // 4. Batch Insert
+    const saved = await GrnExcel.insertMany(records);
+    console.log("Saved Records Count:", saved.length);
 
-} catch (err) {
-  console.log("========== ERROR ==========");
-  console.log(err);
-  console.log(err.stack);
+    return res.status(200).json({
+      success: true,
+      message: `${saved.length} records uploaded successfully.`,
+    });
+  } catch (err) {
+    console.error("========== ERROR ==========");
+    console.error(err);
 
-  return res.status(500).json({
-    success: false,
-    message: err.message,
-    stack: err.stack,
-  });
-}
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Internal Server Error",
+      stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
+    });
+  }
 };
 
 // ===============================
