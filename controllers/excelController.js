@@ -233,6 +233,9 @@ exports.getRecordByInvoice = async (req, res) => {
 // ===============================
 // 5. Complete GRN
 // ===============================
+// ===============================
+// Complete GRN for ALL records matching an Invoice
+// ===============================
 exports.completeGrnByInvoice = async (req, res) => {
   try {
     const { invoiceNo, grnNum, grnDate } = req.body;
@@ -244,32 +247,50 @@ exports.completeGrnByInvoice = async (req, res) => {
       });
     }
 
-    const record = await GrnExcel.findOne({
-      invoiceNo: invoiceNo.trim(),
+    // 1. Safe Regex Escape (For slashes like "INV/2026/001" or hyphens)
+    const trimmedInvoice = invoiceNo.trim();
+    const escapedInvoice = trimmedInvoice.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const invoiceRegex = new RegExp(`^${escapedInvoice}$`, "i");
+
+    // 2. Multi-field Query (Schema fallback for all possible field names)
+    const query = {
+      $or: [
+        { invoiceNo: invoiceRegex },
+        { "Invoice No.": invoiceRegex },
+        { "Invoice No": invoiceRegex },
+      ],
+    };
+
+    // 3. Update ALL matching records in MongoDB
+    const result = await GrnExcel.updateMany(query, {
+      $set: {
+        grnNum: grnNum.trim(),
+        "GRN NUM": grnNum.trim(),
+        "GRN NUMBER": grnNum.trim(),
+        grnDate: new Date(grnDate),
+        grnStatus: "Completed",
+        status: "GRN Successful", // Ensures frontend status badge updates properly
+      },
     });
 
-    if (!record) {
+    if (result.matchedCount === 0) {
       return res.status(404).json({
         success: false,
-        message: "Invoice not found",
+        message: "No records found for the selected Invoice No",
       });
     }
 
-    record.grnNum = grnNum.trim();
-    record.grnDate = new Date(grnDate);
-    record.grnStatus = "Completed";
-
-    await record.save();
-
     return res.status(200).json({
       success: true,
-      message: "GRN Updated Successfully",
-      data: record,
+      message: `GRN updated successfully for ${result.modifiedCount} item(s)!`,
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount,
     });
   } catch (err) {
+    console.error("Error in completeGrnByInvoice:", err);
     return res.status(500).json({
       success: false,
-      message: err.message,
+      message: err.message || "Internal Server Error",
     });
   }
 };
