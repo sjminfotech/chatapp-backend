@@ -56,6 +56,21 @@ exports.downloadSampleFormat = (req, res) => {
   }
 };
 
+// Helper function to extract cell value regardless of casing or extra spaces/dots
+const getRowVal = (row, fieldKeys) => {
+  const rowKeys = Object.keys(row);
+  for (const expectedKey of fieldKeys) {
+    const normalizedExpected = expectedKey.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const foundKey = rowKeys.find(
+      (rk) => rk.trim().toLowerCase().replace(/[^a-z0-9]/g, "") === normalizedExpected
+    );
+    if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null) {
+      return String(row[foundKey]).trim();
+    }
+  }
+  return "";
+};
+
 // ===============================
 // 2. Upload Excel
 // ===============================
@@ -80,58 +95,58 @@ exports.uploadBulkExcel = async (req, res) => {
     // 3. Read Workbook Buffer
     const workbook = XLSX.read(req.file.buffer, {
       type: "buffer",
-      cellDates: true, // Auto-parse JS Date objects from Excel
+      cellDates: true,
     });
 
     const sheetName = workbook.SheetNames[0];
-    const sheetData = XLSX.utils.sheet_to_json(
-      workbook.Sheets[sheetName],
-      { raw: false }
-    );
+    const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+      raw: false,
+    });
 
     console.log("Total Excel Rows:", sheetData.length);
 
     const records = [];
 
     for (const row of sheetData) {
-      const invoiceNo = row["Invoice No"]
-        ? String(row["Invoice No"]).trim()
-        : "";
+      const invoiceNo = getRowVal(row, ["Invoice No", "InvoiceNo", "Invoice No."]);
 
       if (!invoiceNo) continue;
 
       // Safe Date Parsing
       let parsedGrnDate = null;
-      if (row["GRN Date"]) {
-        const d = new Date(row["GRN Date"]);
+      const rawGrnDate = getRowVal(row, ["GRN Date", "GRNDate"]);
+      if (rawGrnDate) {
+        const d = new Date(rawGrnDate);
         if (!isNaN(d.getTime())) {
           parsedGrnDate = d;
         }
       }
 
+      const grnNumVal = getRowVal(row, ["GRN NUM", "GRN Num", "GRNNUM"]);
+
       records.push({
         userId: req.user._id,
         uploadedBy: req.user.name || "Admin",
 
-        siteCode: row["SITE CODE"] || "",
-        site: row["SITE"] || "",
+        siteCode: getRowVal(row, ["SITE CODE", "Site Code"]),
+        site: getRowVal(row, ["SITE", "Site"]),
         invoiceNo,
-        year: row["YEAR"] || "",
-        month: row["MONTH"] || "",
-        transport: row["Transport"] || "",
-        lrNo: row["LR No."] || "",
-        vehicleNo: row["Vehicle No"] || "",
-        poNo: row["PO No."] || "",
-        eway: row["Eway"] || "",
-        make: row["MAKE"] || "",
-        model: row["Model"] || "",
-        machinen: row["Machinen"] || "",
-        assetNo: row["Asset No."] || "",
+        year: getRowVal(row, ["YEAR", "Year"]),
+        month: getRowVal(row, ["MONTH", "Month"]),
+        transport: getRowVal(row, ["Transport"]),
+        lrNo: getRowVal(row, ["LR No.", "LR No", "LRNo"]),
+        vehicleNo: getRowVal(row, ["Vehicle No", "Vehicle No."]),
+        poNo: getRowVal(row, ["PO No.", "PO No", "PONo"]),
+        eway: getRowVal(row, ["Eway", "E-Way"]),
+        make: getRowVal(row, ["MAKE", "Make"]),
+        model: getRowVal(row, ["Model"]),
+        machinen: getRowVal(row, ["Machinen", "Machine"]),
+        assetNo: getRowVal(row, ["Asset No.", "Asset No"]),
 
-        grnNum: row["GRN NUM"] || "",
+        grnNum: grnNumVal,
         grnDate: parsedGrnDate,
 
-        grnStatus: row["GRN NUM"] ? "Completed" : "Pending",
+        grnStatus: grnNumVal ? "Completed" : "Pending",
       });
     }
 
@@ -220,17 +235,12 @@ exports.getRecordByInvoice = async (req, res) => {
 // ===============================
 exports.completeGrnByInvoice = async (req, res) => {
   try {
-    const {
-      invoiceNo,
-      grnNum,
-      grnDate,
-    } = req.body;
+    const { invoiceNo, grnNum, grnDate } = req.body;
 
     if (!invoiceNo || !grnNum || !grnDate) {
       return res.status(400).json({
         success: false,
-        message:
-          "Invoice No, GRN NUM and GRN Date are required",
+        message: "Invoice No, GRN NUM and GRN Date are required",
       });
     }
 
