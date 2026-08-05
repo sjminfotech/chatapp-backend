@@ -50,10 +50,14 @@ exports.uploadBulkExcel = async (req, res) => {
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const sheetData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
+    console.log("Rows in Excel:", sheetData.length);
+console.log("Sheet Data:", sheetData);
     const recordsToInsert = [];
 
     for (const row of sheetData) {
+
+
+   console.log("Current Row:", row);
       const invoiceNo = row["Invoice No"] ? String(row["Invoice No"]).trim() : null;
       if (!invoiceNo) continue; // Skip if Invoice No is empty
 
@@ -81,7 +85,13 @@ exports.uploadBulkExcel = async (req, res) => {
     }
 
     if (recordsToInsert.length > 0) {
-      await GrnExcel.insertMany(recordsToInsert);
+      console.log("Records to Insert:", recordsToInsert.length);
+console.log(recordsToInsert);
+     const saved = await GrnExcel.insertMany(recordsToInsert);
+
+console.log("Saved Records:", saved.length);
+console.log(saved);
+
     }
 
     return res.status(200).json({
@@ -93,6 +103,30 @@ exports.uploadBulkExcel = async (req, res) => {
   }
 };
 
+// 5. Get All Uploaded Records
+exports.getAllRecords = async (req, res) => {
+  try {
+    console.log("Logged User:", req.user._id);
+
+    const total = await GrnExcel.countDocuments();
+    console.log("Total Records In DB:", total);
+
+    const records = await GrnExcel.find();
+    console.log("Records Found:", records.length);
+
+    return res.status(200).json({
+      success: true,
+      data: records,
+    });
+  } catch (err) {
+    console.error("Fetch Records Error:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
 // 3. STEP 2: Invoice No Match karke GRN NUM & GRN Date Add & Successful karna
 exports.completeGrnByInvoice = async (req, res) => {
   try {

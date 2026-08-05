@@ -2,37 +2,43 @@ const mongoose = require("mongoose");
 
 const grnSchema = new mongoose.Schema(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    uploadedBy: { type: String, required: true },
-    
-    // Image Headers (Excel Fields)
-    siteCode: { type: String, trim: true, default: "" },
-    site: { type: String, trim: true, default: "" },
-    invoiceNo: { type: String, required: true, trim: true, index: true }, // Invoice Match Karne Ke Liye
-    year: { type: String, trim: true, default: "" },
-    month: { type: String, trim: true, default: "" },
-    transport: { type: String, trim: true, default: "" },
-    lrNo: { type: String, trim: true, default: "" },
-    vehicleNo: { type: String, trim: true, default: "" },
-    poNo: { type: String, trim: true, default: "" },
-    eway: { type: String, trim: true, default: "" },
-    make: { type: String, trim: true, default: "" },
-    model: { type: String, trim: true, default: "" },
-    machinen: { type: String, trim: true, default: "" },
-    assetNo: { type: String, trim: true, default: "" },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    uploadedBy: {
+      type: String,
+      required: true,
+    },
 
-    // Step 2 Fields (Invoice Match ke Baad Update Honge)
-    grnNum: { type: String, trim: true, default: "" },
+    siteCode: { type: String, default: "" },
+    site: { type: String, default: "" },
+    invoiceNo: { type: String, required: true, index: true },
+    year: { type: String, default: "" },
+    month: { type: String, default: "" },
+    transport: { type: String, default: "" },
+    lrNo: { type: String, default: "" },
+    vehicleNo: { type: String, default: "" },
+    poNo: { type: String, default: "" },
+    eway: { type: String, default: "" },
+    make: { type: String, default: "" },
+    model: { type: String, default: "" },
+    machinen: { type: String, default: "" },
+    assetNo: { type: String, default: "" },
+
+    grnNum: { type: String, default: "" },
     grnDate: { type: Date, default: null },
 
-    // GRN Status
     grnStatus: {
       type: String,
       enum: ["Pending", "Completed"],
       default: "Pending",
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
 module.exports = mongoose.model("GrnExcel", grnSchema);

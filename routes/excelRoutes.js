@@ -7,6 +7,7 @@ const {
   uploadBulkExcel,
   completeGrnByInvoice,
   getRecordByInvoice,
+  getAllRecords,
 } = require("../controllers/excelController");
 
 const authMiddleware = require("../middleware/authMiddleware");
@@ -19,6 +20,9 @@ router.get("/download-format", downloadSampleFormat);
 router.post("/upload", authMiddleware, upload.single("excelFile"), uploadBulkExcel);
 
 // Step 2 APIs
+
+// ✅ Fetch All Uploaded Records
+router.get("/list", authMiddleware, getAllRecords);
 router.get("/get-invoice/:invoiceNo", authMiddleware, getRecordByInvoice); // Frontend verification
 router.put("/complete-grn", authMiddleware, completeGrnByInvoice); // Invoice match & GRN Success
 
