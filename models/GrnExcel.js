@@ -38,6 +38,7 @@ const grnSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    collection: "grnexcels",
   }
 );
 
