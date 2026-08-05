@@ -125,18 +125,22 @@ exports.uploadBulkExcel = async (req, res) => {
       console.log("Saved:", saved.length);
     }
 
-    return res.status(200).json({
-      success: true,
-      message: `${records.length} records uploaded successfully.`,
-    });
-  } catch (err) {
-    console.error(err);
+   return res.status(200).json({
+    success: true,
+    message: `${records.length} records uploaded successfully.`,
+  });
 
-    return res.status(500).json({
-      success: false,
-      message: err.message,
-    });
-  }
+} catch (err) {
+  console.log("========== ERROR ==========");
+  console.log(err);
+  console.log(err.stack);
+
+  return res.status(500).json({
+    success: false,
+    message: err.message,
+    stack: err.stack,
+  });
+}
 };
 
 // ===============================
