@@ -10,6 +10,14 @@ const {
   getAllRecords,
 } = require("../controllers/excelController");
 
+console.log({
+  downloadSampleFormat: typeof downloadSampleFormat,
+  uploadBulkExcel: typeof uploadBulkExcel,
+  completeGrnByInvoice: typeof completeGrnByInvoice,
+  getRecordByInvoice: typeof getRecordByInvoice,
+  getAllRecords: typeof getAllRecords,
+});
+
 const authMiddleware = require("../middleware/authMiddleware");
 
 const storage = multer.memoryStorage();
