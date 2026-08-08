@@ -6,95 +6,125 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-
     phone: {
       type: String,
       required: true,
       unique: true,
     },
-
     email: {
       type: String,
       required: true,
       unique: true,
     },
-
     password: {
       type: String,
       required: true,
     },
 
-  otp: {
+    // 🔹 ALL ENUM ROLES MATCHING YOUR SYSTEM
+    role: {
+      type: String,
+      enum: [
+        "super_admin",
+        "admin",
+        "pdf_manager",
+        "delivery",
+        "warehouse",
+        "hr",
+        "user",
+      ],
+      default: "user",
+    },
+
+    permissions: [
+      {
+        type: String,
+      },
+    ],
+
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+
+    department: {
+      type: String,
+      default: "",
+    },
+
+    otp: {
       type: String,
       default: null,
     },
+
     otpExpiry: {
       type: Date,
       default: null,
     },
-      image: {
-    type: String,
-    default: "",
-  },
-  bio: {
-  type: String,
-  default: "",
-},
-  username: {
-    type: String,
-    unique: true,
-    sparse: true, // username optional
-  },
 
-gender: {
-  type: String,
-  default: "",
-},
-followers: [
-  {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-  },
-],
+    image: {
+      type: String,
+      default: "",
+    },
 
-following: [
-  {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-  },
-],
+    bio: {
+      type: String,
+      default: "",
+    },
 
-followRequestsSent: [
-  {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-  },
-],
+    username: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
 
-followRequestsReceived: [
-  {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-  },
-],
-  blockedUsers: [
+    gender: {
+      type: String,
+      default: "",
+    },
+
+    followers: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
       },
     ],
-posts: [
-  {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Post",
+
+    following: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    followRequestsSent: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    followRequestsReceived: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    blockedUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    posts: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Post",
+      },
+    ],
   },
-],
-    otpExpiry: {
-      type: Date,
-      default: null,
-    }
-  },
-  
   {
     timestamps: true,
   }

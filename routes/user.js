@@ -1,19 +1,25 @@
 const express = require("express");
 const router = express.Router();
+const crypto = require("crypto");
+const bcrypt = require("bcryptjs");
+
 const User = require("../models/User");
 const Post = require("../models/Post");
 const auth = require("../middleware/auth");
-const authMiddleware = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMedia");
+const mongoose = require("mongoose");
+// =========================================================
+// 1. ME & PROFILE ROUTES
+// =========================================================
 
 router.get("/profile", auth, (req, res) => {
   res.json({
     message: "Protected Route",
-    user: req.user
+    user: req.user,
   });
 });
 
-// ✅ ME ROUTE — hamesha dynamic route se upar
+// ✅ ME ROUTE — Hamesha dynamic route se upar
 router.get("/me", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select("-password");
@@ -24,62 +30,12 @@ router.get("/me", auth, async (req, res) => {
   }
 });
 
-// ================= BLOCK / UNBLOCK USER =================
-router.put("/block/:id", auth, async (req, res) => {
-  try {
-    // 💡 FIXED: req.user.userId use kiya jo aapka auth middleware provide karta hai
-    const loggedInUserId = req.user.userId; 
-    const targetUserId = req.params.id;
+// =========================================================
+// 2. USER MANAGEMENT APIs (FETCH ALL, UPDATE ROLE, DISABLE)
+// =========================================================
 
-    if (!loggedInUserId) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
-    if (loggedInUserId.toString() === targetUserId.toString()) {
-      return res
-        .status(400)
-        .json({ message: "You cannot block yourself" });
-    }
-
-    const user = await User.findById(loggedInUserId);
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // ✅ safety
-    if (!Array.isArray(user.blockedUsers)) {
-      user.blockedUsers = [];
-    }
-
-    // remove null / undefined
-    user.blockedUsers = user.blockedUsers.filter(Boolean);
-
-    const alreadyBlocked = user.blockedUsers.some(
-      (id) => id.toString() === targetUserId.toString()
-    );
-
-    if (alreadyBlocked) {
-      // UNBLOCK
-      user.blockedUsers = user.blockedUsers.filter(
-        (id) => id.toString() !== targetUserId.toString()
-      );
-      await user.save();
-      return res.json({ message: "User unblocked" });
-    } else {
-      // BLOCK
-      user.blockedUsers.push(targetUserId);
-      await user.save();
-      return res.json({ message: "User blocked" });
-    }
-  } catch (error) {
-    console.error("BLOCK API ERROR:", error);
-    return res.status(500).json({ message: "Server error" });
-  }
-});
-
-// 👇 ALL USERS API
-router.get("/users", auth, async (req, res) => {
+// 🔹 A. ALL USERS FETCH API
+router.get("/", auth, async (req, res) => {
   try {
     const users = await User.find()
       .select("-password")
@@ -91,11 +47,141 @@ router.get("/users", auth, async (req, res) => {
 
     res.json(users);
   } catch (err) {
-    res.status(500).json({
-      message: err.message,
-    });
+    res.status(500).json({ message: err.message });
   }
 });
+
+// 🔹 UPDATE USER ROLE API
+router.patch("/:id/role", auth, async (req, res) => {
+  try {
+    const { role } = req.body;
+    const targetUserId = req.params.id;
+
+    // ✅ Validate if ID is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+      return res.status(400).json({ message: "Invalid User ID format" });
+    }
+
+    const validRoles = [
+      "super_admin",
+      "admin",
+      "pdf_manager",
+      "delivery",
+      "warehouse",
+      "hr",
+      "user",
+    ];
+
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ message: "Invalid role specified" });
+    }
+
+   const updatedUser = await User.findByIdAndUpdate(
+  targetUserId,
+{ role },
+  { returnDocument: 'after' }
+).select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      success: true,
+      message: `Role updated to ${role}`,
+      user: updatedUser,
+    });
+  } catch (err) {
+    console.error("ROLE UPDATE ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+// 🔹 C. DISABLE / ENABLE ACCOUNT API
+router.patch("/:id/status", auth, async (req, res) => {
+  try {
+    const { isActive } = req.body; // true ya false
+    const targetUserId = req.params.id;
+
+    // Prevent self-disable
+    if (req.user.userId.toString() === targetUserId.toString()) {
+      return res
+        .status(400)
+        .json({ message: "You cannot disable your own account" });
+    }
+
+  const updatedUser = await User.findByIdAndUpdate(
+  targetUserId,
+  { isActive },
+  { returnDocument: 'after' }
+).select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      success: true,
+      message: isActive ? "Account enabled" : "Account disabled",
+      user: updatedUser,
+    });
+  } catch (err) {
+    console.error("STATUS UPDATE ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// =========================================================
+// 3. BLOCK / UNBLOCK USER
+// =========================================================
+
+router.put("/block/:id", auth, async (req, res) => {
+  try {
+    const loggedInUserId = req.user.userId;
+    const targetUserId = req.params.id;
+
+    if (!loggedInUserId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (loggedInUserId.toString() === targetUserId.toString()) {
+      return res.status(400).json({ message: "You cannot block yourself" });
+    }
+
+    const user = await User.findById(loggedInUserId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!Array.isArray(user.blockedUsers)) {
+      user.blockedUsers = [];
+    }
+
+    user.blockedUsers = user.blockedUsers.filter(Boolean);
+
+    const alreadyBlocked = user.blockedUsers.some(
+      (id) => id.toString() === targetUserId.toString()
+    );
+
+    if (alreadyBlocked) {
+      user.blockedUsers = user.blockedUsers.filter(
+        (id) => id.toString() !== targetUserId.toString()
+      );
+      await user.save();
+      return res.json({ message: "User unblocked" });
+    } else {
+      user.blockedUsers.push(targetUserId);
+      await user.save();
+      return res.json({ message: "User blocked" });
+    }
+  } catch (error) {
+    console.error("BLOCK API ERROR:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+// =========================================================
+// 4. FEED & SEARCH
+// =========================================================
 
 router.get("/feed", auth, async (req, res) => {
   try {
@@ -103,21 +189,18 @@ router.get("/feed", auth, async (req, res) => {
 
     const visiblePosts = posts.filter(
       (post) =>
-        post.user.followers.some(
+        post.user?.followers?.some(
           (id) => id.toString() === req.user.userId
-        ) ||
-        post.user._id.toString() === req.user.userId
+        ) || post.user?._id?.toString() === req.user.userId
     );
 
     res.json(visiblePosts);
   } catch (err) {
-    res.status(500).json({
-      message: err.message,
-    });
+    res.status(500).json({ message: err.message });
   }
 });
 
-// ✅ SEARCH USER (ALWAYS ABOVE /:id)
+// ✅ SEARCH USER (Always above /:id)
 router.get("/search", async (req, res) => {
   try {
     const { query } = req.query;
@@ -129,10 +212,7 @@ router.get("/search", async (req, res) => {
     const regex = new RegExp(query, "i");
 
     const users = await User.find({
-      $or: [
-        { name: regex },
-        { username: regex }
-      ]
+      $or: [{ name: regex }, { username: regex }],
     }).select("name username email");
 
     res.json(users);
@@ -142,13 +222,16 @@ router.get("/search", async (req, res) => {
   }
 });
 
+// =========================================================
+// 5. FOLLOW & UNFOLLOW SYSTEM
+// =========================================================
+
 router.post("/send-follow-request/:id", auth, async (req, res) => {
   try {
     const sender = await User.findById(req.user.userId);
     const receiver = await User.findById(req.params.id);
 
-    if (!receiver)
-      return res.status(404).json({ message: "User not found" });
+    if (!receiver) return res.status(404).json({ message: "User not found" });
 
     if (!receiver.followRequestsReceived.includes(sender._id)) {
       receiver.followRequestsReceived.push(sender._id);
@@ -158,10 +241,7 @@ router.post("/send-follow-request/:id", auth, async (req, res) => {
       await sender.save();
     }
 
-    res.json({
-      success: true,
-      message: "Follow request sent",
-    });
+    res.json({ success: true, message: "Follow request sent" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -169,8 +249,10 @@ router.post("/send-follow-request/:id", auth, async (req, res) => {
 
 router.get("/follow-requests", auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId)
-      .populate("followRequestsReceived", "name image email");
+    const user = await User.findById(req.user.userId).populate(
+      "followRequestsReceived",
+      "name image email"
+    );
 
     res.json(user.followRequestsReceived);
   } catch (err) {
@@ -206,31 +288,19 @@ router.post("/accept-request/:id", auth, async (req, res) => {
     await currentUser.save();
     await sender.save();
 
-    res.json({
-      success: true,
-      message: "Request accepted",
-    });
+    res.json({ success: true, message: "Request accepted" });
   } catch (err) {
-    res.status(500).json({
-      message: err.message,
-    });
+    res.status(500).json({ message: err.message });
   }
 });
 
-// POST /api/follow/unfollow/:id
 router.post("/unfollow/:id", auth, async (req, res) => {
   try {
-    // 💡 FIXED: Yahan bhi req.user._id galat tha, req.user.userId kiya hai
-    const myId = req.user.userId; 
+    const myId = req.user.userId;
     const targetId = req.params.id;
 
-    await User.findByIdAndUpdate(myId, {
-      $pull: { following: targetId }
-    });
-
-    await User.findByIdAndUpdate(targetId, {
-      $pull: { followers: myId }
-    });
+    await User.findByIdAndUpdate(myId, { $pull: { following: targetId } });
+    await User.findByIdAndUpdate(targetId, { $pull: { followers: myId } });
 
     res.json({ success: true });
   } catch (err) {
@@ -239,7 +309,6 @@ router.post("/unfollow/:id", auth, async (req, res) => {
   }
 });
 
-// FOLLOW USER
 router.post("/follow/:id", auth, async (req, res) => {
   try {
     const currentUser = await User.findById(req.user.userId);
@@ -267,7 +336,10 @@ router.post("/follow/:id", auth, async (req, res) => {
   }
 });
 
-// 👇 UPDATE PROFILE (MongoDB only)
+// =========================================================
+// 6. PROFILE UPDATE & OTP SYSTEM
+// =========================================================
+
 router.put("/update-profile", auth, async (req, res) => {
   try {
     const { name, email, image, bio, gender } = req.body;
@@ -281,121 +353,109 @@ router.put("/update-profile", auth, async (req, res) => {
     res.json(updatedUser);
   } catch (err) {
     console.error(err);
-    res.status(500).json({
-      message: err.message,
-    });
+    res.status(500).json({ message: err.message });
   }
 });
 
-// 💡 NOTE: Ye route sabse neeche hi rehna chahiye, nahi toh baaki APIs block ho sakti hain
-router.get("/:id", async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id).select("-password");
-
-    if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
-    }
-
-    res.json(user);
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({
-      message: "Server Error",
-    });
-  }
-});
-
-// SEND OTP
 router.post("/send-otp", async (req, res) => {
-  const { email } = req.body;
+  try {
+    const { email } = req.body;
 
-  const user = await User.findOne({ email });
-  if (!user) return res.status(404).json({ message: "User not found" });
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-  const otp = crypto.randomInt(100000, 999999).toString();
+    const otp = crypto.randomInt(100000, 999999).toString();
 
-  user.otp = otp;
-  user.otpExpire = Date.now() + 10 * 60 * 1000; // 10 min
-  await user.save();
+    user.otp = otp;
+    user.otpExpiry = Date.now() + 10 * 60 * 1000; // 10 min
+    await user.save();
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject: "Password Reset OTP",
-    text: `Your OTP is ${otp}. It is valid for 10 minutes.`,
-  });
-
-  res.json({ message: "OTP sent to email" });
+    res.json({ message: "OTP sent to email" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
-
 
 router.post("/verify-otp", async (req, res) => {
-  const { email, otp } = req.body;
+  try {
+    const { email, otp } = req.body;
 
-  const user = await User.findOne({
-    email,
-    otp,
-    otpExpire: { $gt: Date.now() },
-  });
+    const user = await User.findOne({
+      email,
+      otp,
+      otpExpiry: { $gt: Date.now() },
+    });
 
-  if (!user) {
-    return res.status(400).json({ message: "Invalid or expired OTP" });
+    if (!user) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    res.json({ message: "OTP verified" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
-
-  res.json({ message: "OTP verified" });
 });
-const bcrypt = require("bcryptjs");
 
 router.post("/reset-password", async (req, res) => {
-  const { email, newPassword } = req.body;
+  try {
+    const { email, newPassword } = req.body;
 
-  const user = await User.findOne({ email });
-  if (!user) return res.status(404).json({ message: "User not found" });
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-  user.password = hashedPassword;
-  user.otp = undefined;
-  user.otpExpire = undefined;
+    user.password = hashedPassword;
+    user.otp = null;
+    user.otpExpiry = null;
 
-  await user.save();
+    await user.save();
 
-  res.json({ message: "Password updated successfully" });
+    res.json({ message: "Password updated successfully" });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
+// =========================================================
+// 7. MEDIA & POSTS
+// =========================================================
 
 router.get("/user/:userId", async (req, res) => {
   try {
-    const posts = await Post.find({
-      user: req.params.userId,
-    })
+    const posts = await Post.find({ user: req.params.userId })
       .populate("user", "name image")
       .populate("comments.user", "name image")
       .sort({ createdAt: -1 });
 
     res.json(posts);
   } catch (err) {
-    res.status(500).json({
-      message: err.message,
-    });
+    res.status(500).json({ message: err.message });
   }
 });
 
-router.post(
-  "/upload",
-  auth,
-  upload.single("media"),
-  async (req, res) => {
-    try {
-      res.json({
-        url: req.file.path, // Cloudinary URL
-      });
-    } catch (err) {
-      res.status(500).json(err);
-    }
+router.post("/upload", auth, upload.single("media"), async (req, res) => {
+  try {
+    res.json({ url: req.file.path });
+  } catch (err) {
+    res.status(500).json(err);
   }
-);
+});
+
+// 💡 DYNAMIC ID ROUTE (Isse HAMESHA Sabse Niche Hi Rakhein)
+router.get("/:id", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json(user);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Server Error" });
+  }
+});
 
 module.exports = router;

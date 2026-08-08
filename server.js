@@ -4,7 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
-
+// app.use(express.json()); 
 const connectDB = require("./config/db");
 const excelRoutes = require("./routes/excelRoutes");
 // ================= ROUTES =================
@@ -33,6 +33,7 @@ connectDB();
 // ================= MIDDLEWARE =================
 app.use(cors());
 app.use(express.json());
+// app.use(express.urlencoded({ extended: true }));
 app.use(express.urlencoded({ extended: true }));
 
 // ================= STATIC =================
