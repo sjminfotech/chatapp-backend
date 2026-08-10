@@ -8,7 +8,7 @@ const uploadPdf = require("../middleware/uploadPdf"); // Multer instance
 // Controllers
 const pdfController = require("../controllers/pdfController");
 
-// Safe extraction of controller functions
+// Safe extraction of controller functions (getPdfStats YAHAN ADD KIYA HAI)
 const {
   uploadPdfController,
   getAllPdfs,
@@ -16,22 +16,24 @@ const {
   getPdfById,
   downloadPdf,
   deletePdf,
+  getPdfStats, // 👈 Added getPdfStats
 } = pdfController;
 
-// 🔍 QUICK DEBUGGER: Konsi cheez crash kar rahi hai terminal par turant dikhegi
+// 🔍 QUICK DEBUGGER
 console.log("=== CHECKING ROUTE HANDLERS ===");
 console.log("authMiddleware:", typeof authMiddleware);
 console.log("uploadPdf:", typeof uploadPdf);
-console.log("uploadPdf.single:", typeof uploadPdf?.single);
 console.log("uploadPdfController:", typeof uploadPdfController);
+console.log("getPdfStats:", typeof getPdfStats);
 console.log("===============================");
 
 // Handle Multer upload function dynamically
-const uploadHandler = typeof uploadPdf?.single === "function" 
-  ? uploadPdf.single("pdf") 
-  : (req, res, next) => next();
+const uploadHandler =
+  typeof uploadPdf?.single === "function"
+    ? uploadPdf.single("pdf")
+    : (req, res, next) => next();
 
-// Upload PDF Route
+// 1. Upload PDF Route
 router.post(
   "/upload",
   authMiddleware,
@@ -39,7 +41,7 @@ router.post(
   uploadPdfController
 );
 
-// Test Route
+// 2. Test Route
 router.get("/test", authMiddleware, (req, res) => {
   res.json({
     success: true,
@@ -47,19 +49,22 @@ router.get("/test", authMiddleware, (req, res) => {
   });
 });
 
-// Get all PDFs
+// 3. Get all PDFs
 router.get("/", authMiddleware, getAllPdfs);
 
-// Search PDF
+// 4. Search PDF
 router.get("/search", authMiddleware, searchPdfs);
 
-// Get single PDF
-router.get("/:id", authMiddleware, getPdfById);
+// 5. PDF Stats Route (MUST BE ABOVE /:id)
+router.get("/stats", authMiddleware, getPdfStats);
 
-// Download PDF
+// 6. Download PDF
 router.get("/download/:id", authMiddleware, downloadPdf);
 
-// Delete PDF
+// 7. Get single PDF (Hamesha baaki specific routes ke NICHE hona chahiye)
+router.get("/:id", authMiddleware, getPdfById);
+
+// 8. Delete PDF
 router.delete("/:id", authMiddleware, deletePdf);
 
 module.exports = router;
